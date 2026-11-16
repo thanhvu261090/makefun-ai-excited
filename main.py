@@ -4,12 +4,15 @@
 Procedurally draws a single 1024x1024 PNG, standard library only.
 
 The scene: a deep indigo night sky, one huge blazing sun low on the
-horizon, and a bold ribbon of light — cyan melting into magenta — that
-sweeps up from the bottom corner and curls straight into the sun. A tiny
-white paper plane rides the crest of the ribbon, and where the ribbon
-breaks it bursts into a flock of birds. The twist is the scale: the
-smallest thing in the picture (a paper plane) is the one flying into
-the sun. Big punchy text speaks straight to the judge: WOW. / DON'T BLINK.
+horizon — now with a corona of rays and a bright halo ring so it blazes
+instead of sitting as a flat disc — and a bold ribbon of light — cyan
+melting into magenta — that sweeps up from the bottom corner and curls
+straight into the sun. A tiny white paper plane rides the crest of the
+ribbon, and where the ribbon breaks it bursts into a flock of birds,
+each flying mid-flap with asymmetric wings. The twist is the scale:
+the smallest thing in the picture (a paper plane) is the one flying
+into the sun. Big punchy text speaks straight to the judge: WOW. /
+DON'T BLINK.
 
 Everything is deterministic: a fixed-seed generator for the stars, no
 time, no randomness from the environment, no network. Run twice and the
@@ -180,6 +183,19 @@ def draw_sun():
         a = 0.04 + 0.12 * t * t
         col = lerp((255, 90, 40), (255, 170, 60), t)
         disc(SUN_X, SUN_Y, rad, col, a)
+    # corona rays: 24 fixed-angle spikes fanning out past the rim, so the
+    # sun blazes instead of sitting as a flat disc. Drawn before the body
+    # so the body covers their roots and only the spikes show.
+    for k in range(24):
+        ang = math.radians(k * 15.0 + (7.5 if k % 2 else 0.0))
+        length = 235 if k % 2 == 0 else 190
+        x1 = int(SUN_X + math.cos(ang) * SUN_R)
+        y1 = int(SUN_Y + math.sin(ang) * SUN_R)
+        x2 = int(SUN_X + math.cos(ang) * length)
+        y2 = int(SUN_Y + math.sin(ang) * length)
+        line(x1, y1, x2, y2, (255, 180, 80), 0.30, 6)
+    # bright halo ring hugging the rim
+    disc(SUN_X, SUN_Y, SUN_R + 7, (255, 196, 110), 0.55)
     # body: warm gradient rings, brightest at the core
     for rad in range(SUN_R, 0, -2):
         t = 1.0 - rad / SUN_R
@@ -238,15 +254,22 @@ def draw_ribbon():
 
 
 def draw_birds():
-    """The ribbon's crest breaks into a flock — the twist."""
+    """The ribbon's crest breaks into a flock — the twist.
+
+    Each bird now flies with asymmetric wings (one wing up, one down,
+    mid-flap), so the flock reads as birds in motion rather than a row
+    of identical chevrons.
+    """
     flock = [
-        (560, 470, 26), (610, 430, 32), (665, 398, 22), (715, 360, 30),
-        (770, 330, 20), (820, 300, 26), (860, 268, 17), (520, 520, 18),
+        # (x, y, size, flap): flap lifts one wingtip and drops the other
+        (560, 470, 26, 8), (610, 430, 32, -10), (665, 398, 22, 6),
+        (715, 360, 30, -8), (770, 330, 20, 10), (820, 300, 26, -6),
+        (860, 268, 17, 7), (520, 520, 18, -9),
     ]
-    for (x, y, s) in flock:
+    for (x, y, s, flap) in flock:
         col = (255, 240, 180) if s % 3 else (255, 255, 255)
-        line(x - s, y - s // 3, x, y, col, 1.0, 3)
-        line(x, y, x + s, y - s // 3, col, 1.0, 3)
+        line(x - s, y - s // 3 + flap, x, y, col, 1.0, 3)
+        line(x, y, x + s, y - s // 3 - flap, col, 1.0, 3)
 
 
 def draw_plane():

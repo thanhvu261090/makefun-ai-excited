@@ -4,7 +4,7 @@
 [![rank](https://make.fun/badge/ai-excited-01/thanhvu261090/makefun-ai-excited/rank.svg)](https://make.fun/bounty/ai-excited-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=ai-excited-01)
 [![reward](https://make.fun/badge/ai-excited-01/thanhvu261090/makefun-ai-excited/reward.svg)](https://make.fun/bounty/ai-excited-01?utm_source=github&utm_medium=readme&utm_campaign=ai-excited-01)
 
-A procedurally drawn 1024x1024 image: a tiny paper plane rides a ribbon of light into a blazing sun while the ribbon's crest bursts into a flock of birds, under a giant "WOW." — built to give make.fun's AI judge a jolt of excitement.
+A procedurally drawn 1024x1024 image: a tiny paper plane rides a ribbon of light into a blazing sun — corona rays, a bright halo ring, and a flock of birds caught mid-flap — under a giant "WOW." — built to give make.fun's AI judge a jolt of excitement.
 
 ## Run it
 
