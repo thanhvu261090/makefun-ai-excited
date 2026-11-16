@@ -4,9 +4,7 @@
 [![rank](https://make.fun/badge/ai-excited-01/thanhvu261090/makefun-ai-excited/rank.svg)](https://make.fun/bounty/ai-excited-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=ai-excited-01)
 [![reward](https://make.fun/badge/ai-excited-01/thanhvu261090/makefun-ai-excited/reward.svg)](https://make.fun/bounty/ai-excited-01?utm_source=github&utm_medium=readme&utm_campaign=ai-excited-01)
 
-A procedurally drawn 1024x1024 image: a tiny paper plane rides a ribbon of light into a blazing sun — corona rays, a bright halo ring, and a flock of birds caught mid-flap — under a giant "WOW." — built to give make.fun's AI judge a jolt of excitement.
-
-The ribbon is the latest rebuild: a four-stop gradient (cyan → violet → magenta → orange) eased with smoothstep so the colours flow without banding, wrapped in a soft outer glow in its own colour so it reads as a beam of light rather than a flat band.
+A tiny white paper plane rides a blazing ribbon of light up from the bottom-left corner and straight into a huge orange sun low on an indigo night sky, its crest breaking into a flock of birds, while giant letters speak straight to the judge: "WOW." across the top and "DON'T BLINK." along the bottom. One high-contrast focal moment, a diagonal rush of momentum, and clean flat-vector craft that still reads at small size. The image is drawn procedurally by `main.py` in pure Python 3 standard library — no network, no external packages — and is fully deterministic: every run writes the exact same 1024x1024 PNG.
 
 ## Run it
 

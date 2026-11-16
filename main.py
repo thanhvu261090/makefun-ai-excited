@@ -1,24 +1,10 @@
 #!/usr/bin/env python3
-"""Make the AI judge excited — ai-excited-01 entry.
+"""Draw one 1024x1024 PNG: a paper plane rides a ribbon of light into a
+blazing sun under the words WOW. / DON'T BLINK.
 
-Procedurally draws a single 1024x1024 PNG, standard library only.
-
-The scene: a deep indigo night sky, one huge blazing sun low on the
-horizon — with a corona of rays and a bright halo ring so it blazes
-instead of sitting as a flat disc — and a bold ribbon of light — cyan
-melting through violet into magenta into orange, eased so the colours
-flow instead of banding, and wrapped in a soft outer glow so it reads
-as a beam of light, not a flat band — that sweeps up from the bottom
-corner and curls straight into the sun. A tiny white paper plane rides
-the crest of the ribbon, and where the ribbon breaks it bursts into a
-flock of birds, each flying mid-flap with asymmetric wings. The twist is the scale:
-the smallest thing in the picture (a paper plane) is the one flying
-into the sun. Big punchy text speaks straight to the judge: WOW. /
-DON'T BLINK.
-
-Everything is deterministic: a fixed-seed generator for the stars, no
-time, no randomness from the environment, no network. Run twice and the
-bytes are identical.
+Pure standard library (zlib, struct, math, os). Deterministic: every star,
+bird and curve point comes from fixed constants and a fixed-seed generator,
+so two runs write byte-identical files.
 """
 
 import math
@@ -29,101 +15,74 @@ import zlib
 W = 1024
 H = 1024
 
-# ---------------------------------------------------------------- pixels
+# ---------------------------------------------------------------- canvas
 
-buf = bytearray(W * H * 3)
-
-
-def set_px(x, y, r, g, b):
-    if 0 <= x < W and 0 <= y < H:
-        i = (y * W + x) * 3
-        buf[i] = r
-        buf[i + 1] = g
-        buf[i + 2] = b
+ROWS = [bytearray(W * 3) for _ in range(H)]
 
 
-def blend_px(x, y, r, g, b, a):
-    """Blend colour (r,g,b) over the pixel at (x,y) with alpha a (0..1)."""
-    if 0 <= x < W and 0 <= y < H and a > 0.0:
-        if a >= 1.0:
-            set_px(x, y, r, g, b)
-            return
-        i = (y * W + x) * 3
-        buf[i] = int(buf[i] + (r - buf[i]) * a)
-        buf[i + 1] = int(buf[i + 1] + (g - buf[i + 1]) * a)
-        buf[i + 2] = int(buf[i + 2] + (b - buf[i + 2]) * a)
+def rgb(r, g, b):
+    return bytes((r, g, b))
 
 
-def lerp(c1, c2, t):
+def mix(a, b, t):
+    """Blend colour a towards colour b by t (0..1)."""
     return (
-        int(c1[0] + (c2[0] - c1[0]) * t),
-        int(c1[1] + (c2[1] - c1[1]) * t),
-        int(c1[2] + (c2[2] - c1[2]) * t),
+        int(a[0] + (b[0] - a[0]) * t),
+        int(a[1] + (b[1] - a[1]) * t),
+        int(a[2] + (b[2] - a[2]) * t),
     )
 
 
-def fill_span(y, x0, x1, r, g, b, a=1.0):
+def span(y, x0, x1, colour):
+    """Fill one horizontal run on row y with a solid colour."""
     if y < 0 or y >= H:
         return
     x0 = max(0, x0)
-    x1 = min(W - 1, x1)
-    if a >= 1.0:
-        for x in range(x0, x1 + 1):
-            i = (y * W + x) * 3
-            buf[i] = r
-            buf[i + 1] = g
-            buf[i + 2] = b
-    else:
-        for x in range(x0, x1 + 1):
-            blend_px(x, y, r, g, b, a)
+    x1 = min(W, x1)
+    if x1 <= x0:
+        return
+    ROWS[y][x0 * 3:x1 * 3] = rgb(*colour) * (x1 - x0)
 
 
-def disc(cx, cy, rad, colour, a=1.0):
-    """Filled circle, centre (cx,cy), radius rad, colour (r,g,b)."""
-    r = int(rad)
+def rect(x, y, w, h, colour):
+    for yy in range(max(0, y), min(H, y + h)):
+        span(yy, x, x + w, colour)
+
+
+def disc(cx, cy, r, colour):
+    """Filled circle, clipped to the canvas."""
+    if r <= 0:
+        return
     for dy in range(-r, r + 1):
-        dx = int(math.sqrt(max(0, r * r - dy * dy)))
-        fill_span(cy + dy, cx - dx, cx + dx, colour[0], colour[1], colour[2], a)
+        yy = cy + dy
+        if 0 <= yy < H:
+            dx = math.isqrt(r * r - dy * dy)
+            span(yy, cx - dx, cx + dx + 1, colour)
 
 
-def line(x0, y0, x1, y1, colour, a=1.0, width=1):
-    """Bresenham line, optionally thick."""
-    dx = abs(x1 - x0)
-    dy = -abs(y1 - y0)
-    sx = 1 if x0 < x1 else -1
-    sy = 1 if y0 < y1 else -1
-    err = dx + dy
-    x, y = x0, y0
-    while True:
-        if width <= 1:
-            blend_px(x, y, colour[0], colour[1], colour[2], a)
-        else:
-            disc(x, y, width // 2, colour, a)
-        if x == x1 and y == y1:
-            break
-        e2 = 2 * err
-        if e2 >= dy:
-            err += dy
-            x += sx
-        if e2 <= dx:
-            err += dx
-            y += sy
+def thick_line(x0, y0, x1, y1, r, colour):
+    """A thick straight stroke, drawn as a chain of discs."""
+    steps = max(1, int(math.hypot(x1 - x0, y1 - y0)))
+    for i in range(steps + 1):
+        t = i / steps
+        disc(int(x0 + (x1 - x0) * t), int(y0 + (y1 - y0) * t), r, colour)
 
 
-def fill_poly(points, colour, a=1.0):
-    """Scanline fill of a simple polygon given as [(x,y), ...]."""
+def fill_poly(points, colour):
+    """Scanline fill of a simple polygon given as [(x, y), ...]."""
     ys = [p[1] for p in points]
-    for y in range(max(0, min(ys)), min(H - 1, max(ys)) + 1):
+    top, bottom = max(0, min(ys)), min(H - 1, max(ys))
+    n = len(points)
+    for y in range(top, bottom + 1):
         xs = []
-        n = len(points)
         for i in range(n):
             x0, y0 = points[i]
             x1, y1 = points[(i + 1) % n]
             if (y0 <= y < y1) or (y1 <= y < y0):
-                xs.append(int(x0 + (y - y0) * (x1 - x0) / (y1 - y0)))
-        if len(xs) >= 2:
-            xs.sort()
-            fill_span(y, xs[0], xs[-1], colour[0], colour[1], colour[2], a)
+                xs.append(x0 + (y - y0) * (x1 - x0) / (y1 - y0))
+        xs.sort()
+        for i in range(0, len(xs) - 1, 2):
+            span(y, int(math.ceil(xs[i])), int(math.floor(xs[i + 1])) + 1, colour)
 
 
 # ------------------------------------------------------- deterministic rng
@@ -132,284 +91,237 @@ _seed = 987654321
 
 
 def rnd():
+    """Fixed-seed linear congruential generator; returns 0..1."""
     global _seed
-    _seed = (_seed * 1103515245 + 12345) & 0x7FFFFFFF
+    _seed = (1103515245 * _seed + 12345) & 0x7FFFFFFF
     return _seed / 0x7FFFFFFF
 
 
-# ------------------------------------------------------------------- sky
+# ------------------------------------------------------------------- font
+# Hand-drawn 5x7 bitmap letters, only the glyphs this picture needs.
 
-def draw_sky():
-    top = (8, 6, 38)
-    mid = (48, 16, 92)
-    low = (150, 42, 96)
-    for y in range(H):
-        t = y / (H - 1)
-        if t < 0.55:
-            c = lerp(top, mid, t / 0.55)
-        else:
-            c = lerp(mid, low, (t - 0.55) / 0.45)
-        base = y * W * 3
-        for x in range(W):
-            i = base + x * 3
-            buf[i] = c[0]
-            buf[i + 1] = c[1]
-            buf[i + 2] = c[2]
-
-
-def draw_stars():
-    for _ in range(240):
-        x = int(rnd() * W)
-        y = int(rnd() * 640)
-        b = 140 + int(rnd() * 115)
-        s = rnd()
-        if s < 0.12:
-            # sparkle: little cross
-            line(x - 3, y, x + 3, y, (b, b, 255), 0.9)
-            line(x, y - 3, x, y + 3, (b, b, 255), 0.9)
-        elif s < 0.5:
-            disc(x, y, 2, (b, b, 255), 0.95)
-        else:
-            set_px(x, y, b, b, 255)
-
-
-# ------------------------------------------------------------------- sun
-
-SUN_X, SUN_Y, SUN_R = 712, 648, 148
-
-
-def draw_sun():
-    # outer glow: concentric discs, fading out (fine steps so no banding)
-    for rad in range(330, SUN_R, -2):
-        t = (330 - rad) / (330 - SUN_R)
-        a = 0.04 + 0.12 * t * t
-        col = lerp((255, 90, 40), (255, 170, 60), t)
-        disc(SUN_X, SUN_Y, rad, col, a)
-    # corona rays: 24 fixed-angle spikes fanning out past the rim, so the
-    # sun blazes instead of sitting as a flat disc. Drawn before the body
-    # so the body covers their roots and only the spikes show.
-    for k in range(24):
-        ang = math.radians(k * 15.0 + (7.5 if k % 2 else 0.0))
-        length = 235 if k % 2 == 0 else 190
-        x1 = int(SUN_X + math.cos(ang) * SUN_R)
-        y1 = int(SUN_Y + math.sin(ang) * SUN_R)
-        x2 = int(SUN_X + math.cos(ang) * length)
-        y2 = int(SUN_Y + math.sin(ang) * length)
-        line(x1, y1, x2, y2, (255, 180, 80), 0.30, 6)
-    # bright halo ring hugging the rim
-    disc(SUN_X, SUN_Y, SUN_R + 7, (255, 196, 110), 0.55)
-    # body: warm gradient rings, brightest at the core
-    for rad in range(SUN_R, 0, -2):
-        t = 1.0 - rad / SUN_R
-        col = lerp((255, 120, 30), (255, 236, 150), t)
-        disc(SUN_X, SUN_Y, rad, col, 1.0)
-    # crisp rim
-    for ang in range(0, 360, 2):
-        a = math.radians(ang)
-        x = int(SUN_X + math.cos(a) * (SUN_R + 1))
-        y = int(SUN_Y + math.sin(a) * (SUN_R + 1))
-        set_px(x, y, 255, 220, 130)
-
-
-# ------------------------------------------------------------- light ribbon
-
-def bezier(p0, p1, p2, t):
-    u = 1.0 - t
-    return (
-        int(u * u * p0[0] + 2 * u * t * p1[0] + t * t * p2[0]),
-        int(u * u * p0[1] + 2 * u * t * p1[1] + t * t * p2[1]),
-    )
-
-
-def ribbon_colour(t):
-    """Four-stop gradient with smoothstep easing between stops.
-
-    cyan -> violet -> magenta -> orange. Easing each segment with
-    smoothstep (u*u*(3-2u)) keeps the colours flowing into one another
-    instead of banding at the joins.
-    """
-    stops = [(0.0, (0, 214, 255)), (0.38, (120, 80, 255)),
-             (0.68, (255, 45, 170)), (1.0, (255, 140, 40))]
-    for i in range(len(stops) - 1):
-        t0, c0 = stops[i]
-        t1, c1 = stops[i + 1]
-        if t <= t1 or i == len(stops) - 2:
-            u = max(0.0, min(1.0, (t - t0) / (t1 - t0)))
-            u = u * u * (3 - 2 * u)
-            return lerp(c0, c1, u)
-    return stops[-1][1]
-
-
-def draw_ribbon():
-    """The swoosh: cyan -> violet -> magenta -> orange, curling into
-    the sun, wrapped in a soft outer glow so it reads as light."""
-    p0 = (30, 990)
-    p1 = (330, 660)
-    p2 = (648, 592)
-    n = 220
-    pts = [bezier(p0, p1, p2, i / n) for i in range(n + 1)]
-    # soft outer glow: one wider, faint pass in the ribbon's own colour
-    for i in range(0, n + 1, 2):
-        t = i / n
-        rad = int(78 - 46 * t) + 14
-        disc(pts[i][0], pts[i][1], rad, ribbon_colour(t), 0.16)
-    for i, (x, y) in enumerate(pts):
-        t = i / n
-        col = ribbon_colour(t)
-        rad = int(78 - 46 * t)  # ribbon tapers as it climbs
-        disc(x, y, rad, col, 1.0)
-    # bright white core, thinner, so the ribbon reads as a beam of light
-    for i, (x, y) in enumerate(pts):
-        t = i / n
-        if t > 0.88:
-            continue
-        rad = max(6, int(20 - 12 * t))
-        disc(x, y, rad, (255, 255, 255), 0.85)
-    # spray: white flecks bursting off the upper edge near the tip
-    for i in range(26):
-        t = 0.55 + rnd() * 0.4
-        x, y = bezier(p0, p1, p2, t)
-        ox = int((rnd() - 0.3) * 150)
-        oy = -int(rnd() * 130)
-        disc(x + ox, y + oy, 2 + int(rnd() * 3), (255, 255, 255), 0.9)
-
-
-def draw_birds():
-    """The ribbon's crest breaks into a flock — the twist.
-
-    Each bird now flies with asymmetric wings (one wing up, one down,
-    mid-flap), so the flock reads as birds in motion rather than a row
-    of identical chevrons.
-    """
-    flock = [
-        # (x, y, size, flap): flap lifts one wingtip and drops the other
-        (560, 470, 26, 8), (610, 430, 32, -10), (665, 398, 22, 6),
-        (715, 360, 30, -8), (770, 330, 20, 10), (820, 300, 26, -6),
-        (860, 268, 17, 7), (520, 520, 18, -9),
-    ]
-    for (x, y, s, flap) in flock:
-        col = (255, 240, 180) if s % 3 else (255, 255, 255)
-        line(x - s, y - s // 3 + flap, x, y, col, 1.0, 3)
-        line(x, y, x + s, y - s // 3 - flap, col, 1.0, 3)
-
-
-def draw_plane():
-    """Tiny white paper plane at the ribbon's tip, nose into the sun."""
-    nose = (730, 546)
-    tail_top = (622, 536)
-    tail_bot = (640, 596)
-    fold = (664, 560)
-    fill_poly([nose, tail_top, fold], (255, 255, 255))
-    fill_poly([nose, fold, tail_bot], (215, 228, 255))
-    line(nose[0], nose[1], fold[0], fold[1], (160, 170, 220), 1.0, 2)
-    # dotted trail behind it, back along the ribbon
-    for i in range(7):
-        t = 0.86 - i * 0.035
-        x, y = bezier((30, 990), (330, 660), (648, 592), t)
-        disc(x, y - 6, 4, (255, 255, 255), 0.9)
-
-
-def draw_shooting_stars():
-    for (x, y, ln) in [(150, 120, 90), (880, 90, 70), (420, 60, 60)]:
-        for i in range(ln):
-            t = i / ln
-            blend_px(
-                x + i, y + i // 2,
-                255, 255, 255, 0.9 * (1 - t),
-            )
-
-
-# -------------------------------------------------------------------- text
-
-# 5x7 bitmap font, only the glyphs we need. '#' = on.
-FONT = {
-    "W": ["10001", "10001", "10001", "10101", "10101", "11011", "10001"],
-    "O": ["01110", "10001", "10001", "10001", "10001", "10001", "01110"],
-    ".": ["00000", "00000", "00000", "00000", "00000", "01100", "01100"],
-    "D": ["11110", "10001", "10001", "10001", "10001", "10001", "11110"],
-    "N": ["10001", "11001", "10101", "10011", "10001", "10001", "10001"],
-    "T": ["11111", "00100", "00100", "00100", "00100", "00100", "00100"],
-    "'": ["00100", "00100", "01000", "00000", "00000", "00000", "00000"],
-    "B": ["11110", "10001", "10001", "11110", "10001", "10001", "11110"],
-    "L": ["10000", "10000", "10000", "10000", "10000", "10000", "11111"],
-    "I": ["01110", "00100", "00100", "00100", "00100", "00100", "01110"],
-    "K": ["10001", "10010", "10100", "11000", "10100", "10010", "10001"],
-    " ": ["00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+GLYPHS = {
+    "W": ("#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"),
+    "O": (".###.", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."),
+    "D": ("###..", "#..#.", "#...#", "#...#", "#...#", "#..#.", "###.."),
+    "N": ("#...#", "##..#", "#.#.#", "#..##", "#...#", "#...#", "#...#"),
+    "T": ("#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."),
+    "B": ("####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."),
+    "L": ("#....", "#....", "#....", "#....", "#....", "#....", "#####"),
+    "I": (".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."),
+    "K": ("#...#", "#..#.", "#.#..", "##...", "#.#..", "#..#.", "#...#"),
+    "'": ("..#..", "..#..", ".#...", ".....", ".....", ".....", "....."),
+    ".": (".....", ".....", ".....", ".....", ".....", ".....", "..#.."),
+    " ": (".....", ".....", ".....", ".....", ".....", ".....", "....."),
 }
 
 
-def text_width(s, scale):
-    return len(s) * 6 * scale - scale
+def draw_text(text, x, y, scale, colour):
+    """Draw text with the bitmap font; returns the width in pixels."""
+    cx = x
+    for ch in text:
+        glyph = GLYPHS[ch]
+        for row_i, row in enumerate(glyph):
+            for col_i, cell in enumerate(row):
+                if cell == "#":
+                    rect(cx + col_i * scale, y + row_i * scale,
+                         scale, scale, colour)
+        cx += 6 * scale
+    return cx - x
 
 
-def draw_text(s, x0, y0, scale, colour):
-    x = x0
-    for ch in s:
-        glyph = FONT.get(ch, FONT[" "])
-        for gy, row in enumerate(glyph):
-            for gx, bit in enumerate(row):
-                if bit == "1":
-                    for dy in range(scale):
-                        for dx in range(scale):
-                            set_px(
-                                x + gx * scale + dx,
-                                y0 + gy * scale + dy,
-                                colour[0], colour[1], colour[2],
-                            )
-        x += 6 * scale
+def text_width(text, scale):
+    return (6 * len(text) - 1) * scale
 
 
-def draw_texts():
-    # "WOW." huge across the top, with a hot-orange drop shadow.
-    big = "WOW."
-    scale = 15
-    w = text_width(big, scale)
+def draw_text_centred(text, y, scale, colour, shadow):
+    w = text_width(text, scale)
     x = (W - w) // 2
-    draw_text(big, x + 7, 78, scale, (255, 90, 30))
-    draw_text(big, x, 70, scale, (255, 255, 255))
-    # "DON'T BLINK." small along the bottom.
-    small = "DON'T BLINK."
-    scale2 = 6
-    w2 = text_width(small, scale2)
-    draw_text(small, (W - w2) // 2, 936, scale2, (255, 236, 170))
+    if shadow is not None:
+        draw_text(text, x + 5, y + 6, scale, shadow)
+    draw_text(text, x, y, scale, colour)
+
+
+# ------------------------------------------------------------------- scene
+
+SUN_X, SUN_Y, SUN_R = 655, 690, 205
+
+
+def paint_sky():
+    """Deep indigo night, dark at the top, warming towards the horizon."""
+    top = (8, 10, 42)
+    mid = (24, 24, 88)
+    low = (72, 38, 122)
+    for y in range(H):
+        if y < 512:
+            colour = mix(top, mid, y / 512)
+        else:
+            colour = mix(mid, low, (y - 512) / 512)
+        ROWS[y][:] = rgb(*colour) * W
+
+
+def paint_stars():
+    for _ in range(230):
+        x = int(rnd() * W)
+        y = int(rnd() * 760)
+        bright = rnd()
+        if bright > 0.92:
+            colour = (255, 244, 200)
+            disc(x, y, 2, colour)
+            span(y, x - 5, x + 6, colour)
+            span(y - 1, x, x + 1, colour)
+            span(y + 1, x, x + 1, colour)
+        elif bright > 0.6:
+            disc(x, y, 2, (235, 238, 255))
+        else:
+            disc(x, y, 1, (200, 205, 240))
+
+
+def paint_shooting_stars():
+    streaks = [
+        (120, 130, 260, 205, (255, 255, 255)),
+        (820, 90, 930, 160, (255, 240, 190)),
+        (430, 210, 520, 262, (210, 230, 255)),
+    ]
+    for x0, y0, x1, y1, colour in streaks:
+        thick_line(x0, y0, x1, y1, 2, colour)
+        disc(x0, y0, 4, colour)
+
+
+def paint_sun():
+    """Layered flat halo, then the blazing disc itself."""
+    for r, colour in (
+        (335, (122, 42, 110)),
+        (300, (178, 52, 92)),
+        (268, (232, 74, 52)),
+        (238, (255, 110, 16)),
+    ):
+        disc(SUN_X, SUN_Y, r, colour)
+    disc(SUN_X, SUN_Y, SUN_R, (255, 138, 0))
+    disc(SUN_X, SUN_Y, 168, (255, 179, 0))
+    disc(SUN_X, SUN_Y, 122, (255, 210, 63))
+    disc(SUN_X, SUN_Y, 72, (255, 243, 176))
+    # Corona spikes: short thick rays around the rim.
+    for k in range(12):
+        a = k * math.pi / 6 + 0.26
+        x0 = SUN_X + int(math.cos(a) * (SUN_R + 6))
+        y0 = SUN_Y + int(math.sin(a) * (SUN_R + 6))
+        x1 = SUN_X + int(math.cos(a) * (SUN_R + 52))
+        y1 = SUN_Y + int(math.sin(a) * (SUN_R + 52))
+        thick_line(x0, y0, x1, y1, 5, (255, 170, 30))
+
+
+def paint_ridge():
+    """Dark horizon ridge the sun sits on."""
+    fill_poly([
+        (0, 905), (170, 862), (410, 898), (690, 866),
+        (1024, 902), (1024, H), (0, H),
+    ], (10, 10, 38))
+
+
+def ribbon_point(t):
+    """Quadratic Bezier from the bottom-left corner into the sun."""
+    x0, y0 = -40, 1035
+    x1, y1 = 260, 480
+    x2, y2 = SUN_X, SUN_Y
+    u = 1 - t
+    return (
+        int(u * u * x0 + 2 * u * t * x1 + t * t * x2),
+        int(u * u * y0 + 2 * u * t * y1 + t * t * y2),
+    )
+
+
+def paint_ribbon():
+    """Bold cyan ribbon with a white-hot core, sweeping into the sun.
+
+    Two passes: every outer disc first, then every core disc, so the
+    core stripe is never painted over by the next outer disc.
+    """
+    steps = 260
+    points = [ribbon_point(i / steps) for i in range(steps + 1)]
+    for i, pt in enumerate(points):
+        width = 34 - 20 * (i / steps)
+        disc(pt[0], pt[1], int(width), (16, 190, 255))
+    for i, pt in enumerate(points):
+        width = 34 - 20 * (i / steps)
+        disc(pt[0], pt[1], int(width * 0.52), (255, 255, 255))
+
+
+def paint_plane():
+    """Tiny white paper plane on the ribbon's crest, nose into the sun."""
+    t = 0.855
+    px, py = ribbon_point(t)
+    qx, qy = ribbon_point(t + 0.02)
+    ang = math.atan2(qy - py, qx - px)
+    ca, sa = math.cos(ang), math.sin(ang)
+
+    def rot(lx, ly):
+        return (px + int(lx * ca - ly * sa), py + int(lx * sa + ly * ca))
+
+    # Dart body: long nose, swept-back wings, folded tail.
+    fill_poly([rot(58, 0), rot(-42, -38), rot(-22, 0), rot(-42, 38)],
+              (255, 255, 255))
+    fill_poly([rot(58, 0), rot(-22, 0), rot(-42, 38)], (214, 226, 255))
+    fill_poly([rot(58, 0), rot(-22, 0), rot(-42, -38)], (255, 255, 255))
+    disc(px, py, 3, (255, 255, 255))
+
+
+def paint_birds():
+    """The ribbon's crest breaking into a flock of small dark birds."""
+    flock = [
+        (0.90, -58, 26), (0.93, -96, 22), (0.96, -70, 30),
+        (0.88, -118, 18), (0.985, -120, 20), (0.92, -150, 16),
+        (0.86, -170, 14), (0.99, -168, 15), (0.94, -196, 13),
+    ]
+    colour = (22, 14, 58)
+    for t, lift, size in flock:
+        bx, by = ribbon_point(t)
+        by += lift
+        thick_line(bx - size, by - size // 3, bx, by + size // 4, 3, colour)
+        thick_line(bx + size, by - size // 3, bx, by + size // 4, 3, colour)
+
+
+def paint_scene():
+    paint_sky()
+    paint_stars()
+    paint_shooting_stars()
+    paint_sun()
+    paint_ridge()
+    paint_ribbon()
+    paint_plane()
+    paint_birds()
+    draw_text_centred("WOW.", 64, 26, (255, 255, 255), (10, 8, 48))
+    draw_text_centred("DON'T BLINK.", 928, 8, (255, 236, 120), (10, 8, 48))
 
 
 # --------------------------------------------------------------------- png
 
+def chunk(kind, data):
+    body = kind + data
+    return struct.pack(">I", len(data)) + body + struct.pack(
+        ">I", zlib.crc32(body) & 0xFFFFFFFF)
+
+
 def encode_png():
-    raw = bytearray()
-    for y in range(H):
-        raw.append(0)  # filter: none
-        raw += buf[y * W * 3:(y + 1) * W * 3]
-    comp = zlib.compress(bytes(raw), 9)
-
-    def chunk(typ, data):
-        c = struct.pack(">I", len(data)) + typ + data
-        return c + struct.pack(">I", zlib.crc32(typ + data) & 0xFFFFFFFF)
-
-    png = b"\x89PNG\r\n\x1a\n"
-    png += chunk(b"IHDR", struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0))
-    png += chunk(b"IDAT", comp)
-    png += chunk(b"IEND", b"")
-    return png
+    raw = b"".join(b"\x00" + bytes(row) for row in ROWS)
+    ihdr = struct.pack(">IIBBBBB", W, H, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(raw, 9))
+        + chunk(b"IEND", b"")
+    )
 
 
 def main():
-    draw_sky()
-    draw_stars()
-    draw_shooting_stars()
-    draw_sun()
-    draw_ribbon()
-    draw_birds()
-    draw_plane()
-    draw_texts()
-    data = encode_png()
-    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR", "/output")
+    out_dir = os.environ.get("MAKEFUN_OUTPUT_DIR") or "out"
     os.makedirs(out_dir, exist_ok=True)
+    paint_scene()
+    data = encode_png()
     path = os.path.join(out_dir, "entry.png")
-    with open(path, "wb") as f:
-        f.write(data)
-    print(f"wrote {path} ({len(data)} bytes, {W}x{H})")
+    with open(path, "wb") as fh:
+        fh.write(data)
+    print(f"wrote {path} ({len(data)} bytes)")
 
 
 if __name__ == "__main__":
