@@ -4,12 +4,14 @@
 Procedurally draws a single 1024x1024 PNG, standard library only.
 
 The scene: a deep indigo night sky, one huge blazing sun low on the
-horizon — now with a corona of rays and a bright halo ring so it blazes
+horizon — with a corona of rays and a bright halo ring so it blazes
 instead of sitting as a flat disc — and a bold ribbon of light — cyan
-melting into magenta — that sweeps up from the bottom corner and curls
-straight into the sun. A tiny white paper plane rides the crest of the
-ribbon, and where the ribbon breaks it bursts into a flock of birds,
-each flying mid-flap with asymmetric wings. The twist is the scale:
+melting through violet into magenta into orange, eased so the colours
+flow instead of banding, and wrapped in a soft outer glow so it reads
+as a beam of light, not a flat band — that sweeps up from the bottom
+corner and curls straight into the sun. A tiny white paper plane rides
+the crest of the ribbon, and where the ribbon breaks it bursts into a
+flock of birds, each flying mid-flap with asymmetric wings. The twist is the scale:
 the smallest thing in the picture (a paper plane) is the one flying
 into the sun. Big punchy text speaks straight to the judge: WOW. /
 DON'T BLINK.
@@ -219,22 +221,41 @@ def bezier(p0, p1, p2, t):
     )
 
 
+def ribbon_colour(t):
+    """Four-stop gradient with smoothstep easing between stops.
+
+    cyan -> violet -> magenta -> orange. Easing each segment with
+    smoothstep (u*u*(3-2u)) keeps the colours flowing into one another
+    instead of banding at the joins.
+    """
+    stops = [(0.0, (0, 214, 255)), (0.38, (120, 80, 255)),
+             (0.68, (255, 45, 170)), (1.0, (255, 140, 40))]
+    for i in range(len(stops) - 1):
+        t0, c0 = stops[i]
+        t1, c1 = stops[i + 1]
+        if t <= t1 or i == len(stops) - 2:
+            u = max(0.0, min(1.0, (t - t0) / (t1 - t0)))
+            u = u * u * (3 - 2 * u)
+            return lerp(c0, c1, u)
+    return stops[-1][1]
+
+
 def draw_ribbon():
-    """The swoosh: cyan -> magenta -> orange, curling into the sun."""
+    """The swoosh: cyan -> violet -> magenta -> orange, curling into
+    the sun, wrapped in a soft outer glow so it reads as light."""
     p0 = (30, 990)
     p1 = (330, 660)
     p2 = (648, 592)
     n = 220
     pts = [bezier(p0, p1, p2, i / n) for i in range(n + 1)]
-    cyan = (0, 214, 255)
-    magenta = (255, 45, 170)
-    orange = (255, 140, 40)
+    # soft outer glow: one wider, faint pass in the ribbon's own colour
+    for i in range(0, n + 1, 2):
+        t = i / n
+        rad = int(78 - 46 * t) + 14
+        disc(pts[i][0], pts[i][1], rad, ribbon_colour(t), 0.16)
     for i, (x, y) in enumerate(pts):
         t = i / n
-        if t < 0.55:
-            col = lerp(cyan, magenta, t / 0.55)
-        else:
-            col = lerp(magenta, orange, (t - 0.55) / 0.45)
+        col = ribbon_colour(t)
         rad = int(78 - 46 * t)  # ribbon tapers as it climbs
         disc(x, y, rad, col, 1.0)
     # bright white core, thinner, so the ribbon reads as a beam of light

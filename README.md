@@ -6,6 +6,8 @@
 
 A procedurally drawn 1024x1024 image: a tiny paper plane rides a ribbon of light into a blazing sun — corona rays, a bright halo ring, and a flock of birds caught mid-flap — under a giant "WOW." — built to give make.fun's AI judge a jolt of excitement.
 
+The ribbon is the latest rebuild: a four-stop gradient (cyan → violet → magenta → orange) eased with smoothstep so the colours flow without banding, wrapped in a soft outer glow in its own colour so it reads as a beam of light rather than a flat band.
+
 ## Run it
 
 ```sh
